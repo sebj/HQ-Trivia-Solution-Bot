@@ -5,7 +5,7 @@ const { exec } = require('child_process')
 const fetch = require('node-fetch')
 const cheerio = require('cheerio')
 const colors = require('colors')
-const config = require('config')
+const config = require('./config.json')
 
 const countOccurrences = (string, subString, allowOverlapping) => {
   string += "";
