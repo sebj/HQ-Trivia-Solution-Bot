@@ -11,7 +11,7 @@ const occurrences = (string, subString, allowOverlapping) => {
   subString += "";
   if (subString.length <= 0) return (string.length + 1);
 
-  var n = 0,
+  let n = 0,
     pos = 0,
     step = allowOverlapping ? 1 : subString.length;
 
@@ -26,10 +26,6 @@ const occurrences = (string, subString, allowOverlapping) => {
 }
 
 const processImage = path => {
-  const top = 400;
-  const bottom = 900;
-  const left = 150;
-  var config1 = { width: 1174 - left - left, height: 2278 - top - bottom, top, left };
   console.log('\033c')
   console.log('Processing...');
   exec(`tesseract "${path}" "${path}.log"`, (err, stdout, stderr) => {
