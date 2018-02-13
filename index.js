@@ -1,9 +1,10 @@
-const fs = require('fs');
-const chokidar = require('chokidar');
-const { exec } = require('child_process');
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
-const colors = require('colors');
+const fs = require('fs')
+const os = require('os')
+const chokidar = require('chokidar')
+const { exec } = require('child_process')
+const fetch = require('node-fetch')
+const cheerio = require('cheerio')
+const colors = require('colors')
 
 const occurrences = (string, subString, allowOverlapping) => {
   string += "";
@@ -105,7 +106,10 @@ const processImage = path => {
     });
   });
 }
-var watcher = chokidar.watch('/Users/Seb/Desktop', {
+
+const username = os.userInfo().username
+
+let watcher = chokidar.watch(`/Users/${username}/Desktop`, {
   ignored: /(^|[\/\\])\../,
   ignoreInitial: true,
   persistent: true
@@ -114,5 +118,5 @@ var watcher = chokidar.watch('/Users/Seb/Desktop', {
 
 watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
-//processImage('/Users/Seb/Desktop/Screen Shot 2018-02-13 at 21.25.26.jpg')
-processImage('/Users/Seb/Desktop/Screen Shot 2018-02-13 at 21.05.29.jpg')
+// Testing:
+// processImage('image/path/here')
