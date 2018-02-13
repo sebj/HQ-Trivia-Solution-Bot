@@ -1,16 +1,17 @@
-const fs = require('fs');
-const chokidar = require('chokidar');
-const { exec } = require('child_process');
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
-const colors = require('colors');
+const fs = require('fs')
+const os = require('os')
+const chokidar = require('chokidar')
+const { exec } = require('child_process')
+const fetch = require('node-fetch')
+const cheerio = require('cheerio')
+const colors = require('colors')
 
 const occurrences = (string, subString, allowOverlapping) => {
   string += "";
   subString += "";
   if (subString.length <= 0) return (string.length + 1);
 
-  var n = 0,
+  let n = 0,
     pos = 0,
     step = allowOverlapping ? 1 : subString.length;
 
@@ -25,10 +26,6 @@ const occurrences = (string, subString, allowOverlapping) => {
 }
 
 const processImage = path => {
-  const top = 400;
-  const bottom = 900;
-  const left = 150;
-  var config1 = { width: 1174 - left - left, height: 2278 - top - bottom, top, left };
   console.log('\033c')
   console.log('Processing...');
   exec(`tesseract "${path}" "${path}.log"`, (err, stdout, stderr) => {
@@ -105,15 +102,26 @@ const processImage = path => {
     });
   });
 }
+<<<<<<< HEAD
 var watcher = chokidar.watch('C:/Users/George/Documents/GitHub/hq-cheat/', {
+=======
+
+const username = os.userInfo().username
+
+let watcher = chokidar.watch(`/Users/${username}/Desktop`, {
+>>>>>>> f19a13720e4528ba02b01b6f27d51a30997302b9
   ignored: /(^|[\/\\])\../,
   ignoreInitial: true,
   persistent: true
 });
 
-
 watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
+<<<<<<< HEAD
 //processImage('/Users/Seb/Desktop/Screen Shot 2018-02-13 at 21.25.26.jpg')
 processImage('C:/Users/George/Documents/GitHub/hq-cheat/testing-screenshots/3.jpg')
  
+=======
+// Testing:
+// processImage('image/path/here')
+>>>>>>> f19a13720e4528ba02b01b6f27d51a30997302b9
