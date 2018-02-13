@@ -105,7 +105,7 @@ const processImage = path => {
     });
   });
 }
-var watcher = chokidar.watch('/Users/Seb/Desktop', {
+var watcher = chokidar.watch('C:/Users/George/Documents/GitHub/hq-cheat/', {
   ignored: /(^|[\/\\])\../,
   ignoreInitial: true,
   persistent: true
@@ -115,4 +115,5 @@ var watcher = chokidar.watch('/Users/Seb/Desktop', {
 watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
 //processImage('/Users/Seb/Desktop/Screen Shot 2018-02-13 at 21.25.26.jpg')
-processImage('/Users/Seb/Desktop/Screen Shot 2018-02-13 at 21.05.29.jpg')
+processImage('C:/Users/George/Documents/GitHub/hq-cheat/testing-screenshots/3.jpg')
+ 
