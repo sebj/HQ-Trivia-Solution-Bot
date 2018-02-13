@@ -136,6 +136,7 @@ const processImage = path => {
   });
 }
 
+
 const username = os.userInfo().username
 const watchPath = config.watchPath || `/Users/${username}/Desktop`
 
