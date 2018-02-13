@@ -111,7 +111,6 @@ let watcher = chokidar.watch(`/Users/${username}/Desktop`, {
   persistent: true
 });
 
-
 watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
 // Testing:
