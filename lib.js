@@ -2,18 +2,23 @@ const fs = require('fs')
 const os = require('os')
 const { exec } = require('child_process')
 const fetch = require('node-fetch')
-const cheerio = require('cheerio')
+const GoogleSearch = require('google-search')
 const colors = require('colors')
 
+const googleSearch = new GoogleSearch({
+  key: '',
+  cx: ''
+})
+
 const countOccurrences = (string, subString, allowOverlapping) => {
-  string += "";
-  subString += "";
+  string += ''
+  subString += ''
   
-  if (subString.length <= 0) return (string.length + 1);
+  if (subString.length <= 0) return (string.length + 1)
 
   let n = 0,
     pos = 0,
-    step = allowOverlapping ? 1 : subString.length;
+    step = allowOverlapping ? 1 : subString.length
 
   while (true) {
     pos = string.indexOf(subString, pos);
@@ -49,7 +54,9 @@ const parseTesseractOutput = outputPath => {
 
 const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) => {
 
-  const $ = cheerio.load(results[0]);
+  console.log(results);
+
+  /*const $ = cheerio.load(results[0]);
   const genericSearch = results[0].toLowerCase();
 
   const choicesWithCounts = questionChoices.map((choiceName, index) => {
@@ -94,7 +101,7 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
     console.log();
   });
 
-  console.log(JSON.stringify(sortedChoices, null, 2));
+  console.log(JSON.stringify(sortedChoices, null, 2));*/
 }
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36';
@@ -120,15 +127,27 @@ const processImage = path => {
     console.log(`${colors.gray('Got choices:')}  ${choices.join(', ')}`);
 
     const searchHeaders = { 'User-Agent': USER_AGENT };
-
-    const baseUrl = `https://www.google.com/search?q=${encodeURIComponent(searchTitle)}+`;
+    
+    const encodedSearchTitle = encodeURIComponent(searchTitle)
 
     const promises = ['', ...choices
     ].map(choice => {
       const encodedChoice = encodeURIComponent('"' + choice + '"');
-      const url = baseUrl + encodedChoice;
-      return fetch(url, { searchHeaders });
-    });
+
+      return new Promise((resolve, reject) => {
+        googleSearch.build({
+          q: `${encodedSearchTitle}+${encodedChoice}`
+        }, function (error, response) {
+          console.log(error, response)
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        })
+
+      })
+    })
     
     Promise.all(promises.map(p => p.then(res => res.text())))
     .then(results => parseGoogleSearchResults(choices, isInvertedQuestion, results))

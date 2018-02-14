@@ -1,3 +1,9 @@
 const processImage = require('../lib').processImage
 
-processImage(`${__dirname}/screenshots/2.jpg`)
+// const testPaths = [1, 2, 3, 4, 5].map(i => `${__dirname}/screenshots/${i}.jpg`)
+
+// for (let path of testPaths) {
+//     processImage(path)
+// }
+
+processImage(`${__dirname}/screenshots/4.jpg`)
