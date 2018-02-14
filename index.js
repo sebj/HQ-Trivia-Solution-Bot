@@ -50,6 +50,11 @@ const parseTesseractOutput = outputPath => {
 }
 
 const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) => {
+
+  if (!results || results.length == 0) {
+    return
+  }
+
   const $ = cheerio.load(results[0]);
   const genericSearch = results[0].toLowerCase();
 
@@ -109,7 +114,7 @@ const processImage = path => {
 
   exec(`tesseract "${path}" "${path}.log"`, (err, stdout, stderr) => {
     // Delete the screenshot
-    deleteFile(path)
+    //deleteFile(path)
 
     if (err) {
       // node couldn't execute the command
@@ -126,16 +131,20 @@ const processImage = path => {
 
     const searchHeaders = { 'User-Agent': USER_AGENT };
 
-    const baseUrl = `https://www.google.com/search?q=${encodeURIComponent(searchTitle)}+${encodeURIComponent('"' + o + '"')}`;
+    const baseUrl = `https://www.google.com/search?q=${encodeURIComponent(searchTitle)}+`;
 
-    const promises = ['', ...choices].map(choice => fetch(baseUrl, { headers }));
+    const promises = ['', ...choices
+    ].map(choice => {
+      const encodedChoice = encodeURIComponent('"' + choice + '"');
+      const url = baseUrl + encodedChoice;
+      return fetch(url, { searchHeaders })
+    });
     
     Promise.all(
       promises.map(p => p.then(res => res.text()))
     ).then(results => parseGoogleSearchResults(results));
   });
 }
-
 
 const username = os.userInfo().username
 const watchPath = config.watchPath || `/Users/${username}/Desktop`
@@ -150,3 +159,5 @@ watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
 // Testing:
 // processImage('image/path/here')
+
+processImage('/Users/Seb/Git/hq-cheat/testing-screenshots/2.jpg')
