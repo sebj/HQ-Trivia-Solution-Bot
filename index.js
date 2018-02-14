@@ -159,5 +159,5 @@ watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
 // Testing:
 // processImage('image/path/here')
-// const testPath = config.testPath
+const testPath = config.testPath
 processImage(testPath)
