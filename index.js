@@ -159,5 +159,5 @@ watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
 
 // Testing:
 // processImage('image/path/here')
-
-processImage('/Users/Seb/Git/hq-cheat/testing-screenshots/2.jpg')
+// const testPath = config.testPath
+processImage(testPath)
