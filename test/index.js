@@ -6,4 +6,4 @@ const processImage = require('../lib').processImage
 //     processImage(path)
 // }
 
-processImage(`${__dirname}/screenshots/4.jpg`)
+processImage(`${__dirname}/screenshots/5.jpg`)

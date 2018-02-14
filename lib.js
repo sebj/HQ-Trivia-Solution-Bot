@@ -2,13 +2,10 @@ const fs = require('fs')
 const os = require('os')
 const { exec } = require('child_process')
 const fetch = require('node-fetch')
-const GoogleSearch = require('google-search')
 const colors = require('colors')
 
-const googleSearch = new GoogleSearch({
-  key: '',
-  cx: ''
-})
+const GOOGLE_API_KEY = ''
+const GOOGLE_CX = ''
 
 const countOccurrences = (string, subString, allowOverlapping) => {
   string += ''
@@ -54,54 +51,45 @@ const parseTesseractOutput = outputPath => {
 
 const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) => {
 
-  console.log(results);
+  // The first of the results array is the question on its own
+  const genericSearch = results[0]
 
-  /*const $ = cheerio.load(results[0]);
-  const genericSearch = results[0].toLowerCase();
+  // Get every search result description, join them into a single long string
+  const genericSearchSnippets = genericSearch.items.map(item => item.snippet).join() || ''
 
-  const choicesWithCounts = questionChoices.map((choiceName, index) => {
-    const result = results[index + 1];
-    const $$ = cheerio.load(result);
-    const scopedCount = parseInt($$('#resultStats').text().toLowerCase().replace('about ', '').replace(' results', '').replace(/,/g, ''), 10);
+  // Get the other 3 search results for each of the 3 answer choices,
+  // Map them to an object with name, number of search results & number of
+  // occurrences in the generic search.
+  // Then sort by occurrences primarily, or search results count if tied.
+  const sortedAnswers = results
+  .slice(0, results.length - 1)
+  .map((result, index) => {
 
+    const choiceName = questionChoices[index]
+    
     return {
       name: choiceName,
-      scopedCount
+      count: result.searchInformation.totalResults,
+      occurrences: countOccurrences(genericSearchSnippets, choiceName.toLowerCase())
     }
   })
+  .sort((a, b) => b.occurrences - a.occurrences || b.count - a.count)
 
-  const sortedChoices = choicesWithCounts
-    .map(o => ({ ...o, count: countOccurrences(genericSearch, o.name.toLowerCase(), true) }))
-    .sort((o1, o2) => o2.scopedCount - o1.scopedCount || o2.count - o1.count);
-
+  // If the question has 'NOT', reverse the order of the sorted answers
   if (isInvertedQuestion) {
-    sortedChoices.reverse();
+    sortedAnswers.reverse();
   }
 
-  if (sortedChoices && sortedChoices.length > 0) {
-    const topAnswer = sortedChoices[0];
+  // If we have answers, take the top answer and show it
+  if (sortedAnswers && sortedAnswers.length > 0) {
+    const topAnswer = sortedAnswers[0];
 
-    console.log(colors.bgBlack(colors.green(`Top Answer: ${topAnswer.name} (${topAnswer.count} - ${topAnswer.scopedCount})\n`)));
+    console.log(colors.bgBlack(colors.green(`Top Answer: ${topAnswer.name} (${topAnswer.count} - ${topAnswer.occurrences})\n`)));
   }
-  
-  const resultSections = $('div.g');
-  const first = resultSections.first();
-  const next = first.next();
-  const third = next.next();
-  const four = third.next();
-  const five = four.next();
 
+  // Mostly for debugging purposes, but may inform a human judgement too
   console.log('Raw Google search results:')
-
-  [first, next, third].forEach(x => {
-    console.log(`\t${x.find('h3.r').text()} [${x.find('cite').text().substring(0, 50)}...]`)
-    x.find('span.st').text().split('\n').forEach(y => {
-      console.log(`\t\t${y}`);
-    });
-    console.log();
-  });
-
-  console.log(JSON.stringify(sortedChoices, null, 2));*/
+  console.log(sortedAnswers)
 }
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36';
@@ -130,26 +118,19 @@ const processImage = path => {
     
     const encodedSearchTitle = encodeURIComponent(searchTitle)
 
+    // Convert each of the answer choices into a promise with a fetch()
+    // function call to the Google Search API
     const promises = ['', ...choices
     ].map(choice => {
       const encodedChoice = encodeURIComponent('"' + choice + '"');
 
-      return new Promise((resolve, reject) => {
-        googleSearch.build({
-          q: `${encodedSearchTitle}+${encodedChoice}`
-        }, function (error, response) {
-          console.log(error, response)
-          if (error) {
-            reject(error);
-          } else {
-            resolve(response);
-          }
-        })
-
-      })
+      return fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&safe=medium&q=${encodedSearchTitle}+${encodedChoice}`, searchHeaders)
     })
     
-    Promise.all(promises.map(p => p.then(res => res.text())))
+    // Execute all promises, wait for them to complete, then construct
+    // an array with the first promise (generic question search term)
+    // and the results of the 3 answer search terms.
+    Promise.all(promises.map(p => p.then(res => res.json())))
     .then(results => parseGoogleSearchResults(choices, isInvertedQuestion, results))
     .catch(e => {
       // Ignored
