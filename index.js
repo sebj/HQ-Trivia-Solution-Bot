@@ -13,3 +13,4 @@ let watcher = chokidar.watch(watchPath, {
 });
 
 watcher.on('add', path => path.endsWith('.jpg') && processImage(path))
+//processImage(config.testPath)
