@@ -8,14 +8,19 @@ const username = os.userInfo().username
 const watchPath = config.watchPath
 
 function toJpeg(path) {
-	console.log("running...");
 	console.log(path);
 	Jimp.read(path).then(function (imageConvert) {
 	    imageConvert.quality(80)
-	         .write("test.jpg"); // save 
+	         .write(config.watchPath + "/test.jpg"); // save
 		}).catch(function (err) {
 	    console.error(err);
 	});
+}
+
+function solveQuestion(path) {
+	console.log("Solving...");
+	toJpeg(path);
+	processImage(config.watchPath + "/test.jpg")
 }
 
 let watcher = chokidar.watch(watchPath, {
@@ -24,5 +29,5 @@ let watcher = chokidar.watch(watchPath, {
   persistent: true
 });
 
-watcher.on('add', path => path.endsWith('.png') && toJpeg(path))
+watcher.on('add', path => path.endsWith('.png') && solveQuestion(path))
 
