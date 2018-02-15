@@ -157,33 +157,19 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
     
   // If the question has 'NOT', reverse the order of the sorted answers
   if (isInvertedQuestion) {
+    console.log(colors.red('The question contains NOT, so answers are being inverted.'))
     sortedAnswers.reverse()
   }
 
   // If we have answers, take the top answer and show it
   if (sortedAnswers && sortedAnswers.length > 0) {
-
-    console.log('\033c')
-    console.log(`${colors.gray('Question:')} ${title}`)
-
     const topAnswer = sortedAnswers[0]
-    
-    const originalChoiceIndex = questionChoices.findIndex(choice => choice == topAnswer.name)
-
-    console.log(colors.gray('Choices:'))
-    questionChoices.forEach((choice, index) => {
-      if (index == originalChoiceIndex) {
-        console.log(color.green(choice))
-
-      } else {
-        console.log(choice)
-      }
-    })
+    console.log(colors.green(`Answer: ${topAnswer.name}`))
   }
 
   // Mostly for debugging purposes, but may inform a human judgement too
-  console.log(color.gray('Raw Google search results:'))
-  console.log(color.gray(sortedAnswers))
+  console.log(colors.gray('\nRaw Google search results:'))
+  console.log(colors.gray(JSON.stringify(sortedAnswers, null, 2)))
 }
 
 const fetchAnswerWikiContent = answer => {
@@ -230,11 +216,12 @@ const answerQuestion = (title, choices) => {
     .then(results =>
       parseGoogleSearchResults(choices, isInvertedQuestion, results))
     .catch(e => {
-      console.log(colors.red('Something went wrong with that question!'))
+      console.log(colors.red('Something went wrong researching that question!'))
     })
 }
 
 const processImage = imageFilePath => {
+
   if (!imageFilePath) {
     console.log(colors.red('Invalid image path'))
     return false
@@ -259,9 +246,9 @@ const processImage = imageFilePath => {
       return
     }
 
-    choices.map(fetchAnswerWiki)
+    //choices.map(fetchAnswerWiki)
 
-    //return answerQuestion(title, choices)
+    return answerQuestion(title, choices)
   })
   .catch(err => console.log(colors.red('Something went wrong with that question!')))
 }
