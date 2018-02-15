@@ -1,11 +1,13 @@
 const fs = require('fs'),
-os = require('os'),
-Jimp = require('jimp'),
-{ exec } = require('child_process'),
-fetch = require('node-fetch'),
-colors = require('colors'),
+  os = require('os'),
+  Jimp = require('jimp'),
+  { exec } = require('child_process'),
+  colors = require('colors'),
+  fetch = require('node-fetch'),
+  Tag = require('en-pos').Tag,
+  wiki = require('wikijs').default
 
-config = require('./config.json')
+  config = require('./config.json')
 
 const GOOGLE_API_KEY = config.googleApiKey
 const GOOGLE_CX = config.googleCSECx
@@ -18,9 +20,9 @@ const convertImage = filePath =>
 
       const { width, height } = image.bitmap
 
-      const horizontalInsetPercent = 80 / 614
-      const topInsetPercent = 154 / 873
-      const heightPercent = 394 / 873
+      const horizontalInsetPercent = 52 / 440
+      const topInsetPercent = 120 / 786
+      const heightPercent = 384 / 786
 
       const cropX = Math.round(width * horizontalInsetPercent)
       const cropY = Math.round(height * topInsetPercent)
@@ -60,7 +62,10 @@ const readText = processedImageFilePath => {
   const path = processedImageFilePath
 
   return new Promise((resolve, reject) => {
-    exec(`tesseract "${path}" "${path}.log"`, (err, stdout, stderr) => {
+
+    const trainingDataFolderPath = `${__dirname}/resources`
+
+    exec(`tesseract '${path}' '${path}.log' -tessdata-dir '${trainingDataFolderPath}'`, (err, stdout, stderr) => {
       // Delete the screenshot
       //deleteFile(path)
 
@@ -75,7 +80,7 @@ const readText = processedImageFilePath => {
       deleteFile(outputPath)
 
       // Filter non-empty/non-blank lines
-      const lines = contents.split('\n').filter(x => x && x.length > 1)
+      const lines = contents.split('\n').filter(x => x && x.length > 1).map(line => line.replace('ﬂ', 'fl'))
 
       const title = lines.slice(0, lines.length - 3).join(' ')
 
@@ -110,11 +115,17 @@ const countOccurrences = (string, subString, allowOverlapping) => {
 
 const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) => {
 
+  if (!results || results.length != 4) {
+    console.log(colors.red('Something went wrong with that question!'))
+    return
+  }
+
   // The first of the results array is the question on its own
   const genericSearch = results[0]
 
   // Get every search result description, join them into a single long string
-  const genericSearchSnippets = genericSearch.items.map(item => item.snippet).join() || ''
+  const genericSearchResults = genericSearch.items || []
+  const genericSearchSnippets = genericSearchResults.map(item => item.snippet).join() || ''
 
   // Get the other 3 search results for each of the 3 answer choices,
   // Map them to an object with name, number of search results & number of
@@ -132,8 +143,18 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
         occurrences: countOccurrences(genericSearchSnippets, choiceName.toLowerCase())
       }
     })
-    .sort((a, b) => b.occurrences - a.occurrences || b.count - a.count)
-
+    .sort((a, b) => {
+      if (a && b) {
+        return b.occurrences - a.occurrences || b.count - a.count
+      } else if (a && !b) {
+        return 1
+      } else if (!a && b) {
+        return -1
+      } else {
+        return 0
+      }
+    })
+    
   // If the question has 'NOT', reverse the order of the sorted answers
   if (isInvertedQuestion) {
     sortedAnswers.reverse()
@@ -141,14 +162,49 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
 
   // If we have answers, take the top answer and show it
   if (sortedAnswers && sortedAnswers.length > 0) {
-    const topAnswer = sortedAnswers[0]
 
-    console.log(colors.bgBlack(colors.green(`Top Answer: ${topAnswer.name} (${topAnswer.count} - ${topAnswer.occurrences})\n`)))
+    console.log('\033c')
+    console.log(`${colors.gray('Question:')} ${title}`)
+
+    const topAnswer = sortedAnswers[0]
+    
+    const originalChoiceIndex = questionChoices.findIndex(choice => choice == topAnswer.name)
+
+    console.log(colors.gray('Choices:'))
+    questionChoices.forEach((choice, index) => {
+      if (index == originalChoiceIndex) {
+        console.log(color.green(choice))
+
+      } else {
+        console.log(choice)
+      }
+    })
   }
 
   // Mostly for debugging purposes, but may inform a human judgement too
-  console.log('Raw Google search results:')
-  console.log(sortedAnswers)
+  console.log(color.gray('Raw Google search results:'))
+  console.log(color.gray(sortedAnswers))
+}
+
+const fetchAnswerWikiContent = answer => {
+  return wiki().search(answer.toLowerCase())
+  .then(data => {
+    console.log(data)
+  }).catch(e => console.log(e))
+  /*return wiki().page(answer)
+    .then(page => page.summary())
+    .then(console.log)
+    .catch(e => console.log(colors.red(e)))*/
+}
+
+const findKeyWords = question => {
+  const words = question.split(' ')
+  const tags = new Tag(words).initial().smooth().tags
+  
+  return tags
+  .map((tag, idx) => ({ word: words[idx], tag }))
+  .filter(item => item.tag.startsWith('NNP'))
+  .map(item => item.word).join(' ').replace('\'s', '')
 }
 
 const answerQuestion = (title, choices) => {
@@ -162,9 +218,9 @@ const answerQuestion = (title, choices) => {
   // function call to the Google Search API
   const promises = ['', ...choices
   ].map(choice => {
-    const encodedChoice = encodeURIComponent('"' + choice + '"')
+    const encodedChoice = encodeURIComponent(`"${choice}"`)
 
-    return fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&safe=medium&q=${encodedSearchTitle}+${encodedChoice}`, searchHeaders)
+    return fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodedSearchTitle}+${encodedChoice}`, searchHeaders)
   })
 
   // Execute all promises, wait for them to complete, then construct
@@ -174,7 +230,7 @@ const answerQuestion = (title, choices) => {
     .then(results =>
       parseGoogleSearchResults(choices, isInvertedQuestion, results))
     .catch(e => {
-      // Ignored
+      console.log(colors.red('Something went wrong with that question!'))
     })
 }
 
@@ -195,14 +251,17 @@ const processImage = imageFilePath => {
 
     if (title && choices.length == 3) {
       console.log(`${colors.gray('Question:')} ${title}`)
-      console.log(`${colors.gray('Choices:')}  ${choices.join(', ')}`)
+      console.log(colors.gray('Choices:'))
+      console.log(choices.join(',\n'))
 
     } else {
       console.log(colors.red('Sorry, couldn\'t read the question!'))
       return
     }
 
-    return answerQuestion(title, choices)
+    choices.map(fetchAnswerWiki)
+
+    //return answerQuestion(title, choices)
   })
   .catch(err => console.log(colors.red('Something went wrong with that question!')))
 }
