@@ -12,33 +12,42 @@ const fs = require('fs'),
 const GOOGLE_API_KEY = config.googleApiKey
 const GOOGLE_CX = config.googleCSECx
 
-const convertImage = filePath => 
-  Jimp.read(filePath)
-    .then(image => {
-      // Remove the last 3 characters (png), replace with '.hq.jpg'
-      const convertedFilePath = filePath.slice(0, -4) + '.hq.jpg'
+// Remove the last 3 characters (png/jpg), replace with '.hq.jpg'
+const convertedImageFilePath = filePath => filePath.slice(0, -4) + '.hq.jpg'
 
-      const { width, height } = image.bitmap
+const convertImage = filePath => {
+  return new Promise((resolve, reject) =>
+    Jimp.read(filePath)
+      .then(image => {
 
-      const horizontalInsetPercent = 52 / 440
-      const topInsetPercent = 120 / 786
-      const heightPercent = 384 / 786
+        const convertedFilePath = convertedImageFilePath(filePath)
 
-      const cropX = Math.round(width * horizontalInsetPercent)
-      const cropY = Math.round(height * topInsetPercent)
-      const cropWidth = width - (2 * cropX)
-      const cropHeight = height * heightPercent
+        const { width, height } = image.bitmap
 
-      image
-        .crop(cropX, cropY, cropWidth, cropHeight)
-        .background(0xFFFFFF)
-        .greyscale()
-        .contrast(0.5)
-        .write(convertedFilePath)
+        const horizontalInsetPercent = 52 / 440
+        const topInsetPercent = 120 / 786
+        const heightPercent = 384 / 786
 
-      return convertedFilePath
+        const cropX = Math.round(width * horizontalInsetPercent)
+        const cropY = Math.round(height * topInsetPercent)
+        const cropWidth = width - (2 * cropX)
+        const cropHeight = height * heightPercent
 
-    }).catch(err => console.error(err))
+        image
+          .crop(cropX, cropY, cropWidth, cropHeight)
+          .background(0xFFFFFF)
+          .greyscale()
+          .contrast(0.5)
+          .write(convertedFilePath, () => {
+            resolve(convertedFilePath)
+          })
+
+      }).catch(err => {
+        console.error(colors.red('Image conversion error: '+err))
+        reject(err)
+      })
+  )
+}
 
 const deleteFile = path => fs.unlink(path, () => {})
 
@@ -78,20 +87,28 @@ const readText = processedImageFilePath => {
 
       const contents = fs.readFileSync(outputPath, 'utf8')
       deleteFile(outputPath)
+      deleteFile(processedImageFilePath)
 
       // Filter non-empty/non-blank lines
-      const lines = contents.split('\n').filter(x => x && x.length > 1).map(line => line.replace('ﬂ', 'fl'))
+      const lines = contents.split('\n').filter(x => x && x.length > 1).map(line => line.replace('ﬂ', 'fl').replace('ﬁ','t'))
 
-      const title = lines.slice(0, lines.length - 3).join(' ')
+      if (!lines || lines.length < 5) {
+        const questionLinesCount = Math.min(lines.length - 3, 0)
+
+        reject(`OCR failed, received ${questionLinesCount} question lines, ${lines.length - questionLinesCount} answers`)
+      }
+
+      const question = lines.slice(0, lines.length - 3).join(' ')
 
       // Last 3 lines are the 3 available choice options
       const choices = lines.slice(lines.length - 3)
 
-      resolve({ title, choices })
+      resolve({ question, choices })
     })
   })
 }
 
+// https://stackoverflow.com/a/7924240/447697
 const countOccurrences = (string, subString, allowOverlapping) => {
   string += ''
   subString += ''
@@ -113,7 +130,7 @@ const countOccurrences = (string, subString, allowOverlapping) => {
   return n
 }
 
-const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) => {
+const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results, wikiMatches) => {
 
   if (!results || results.length != 4) {
     console.log(colors.red('Something went wrong with that question!'))
@@ -140,7 +157,8 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
       return {
         name: choiceName,
         count: result.searchInformation.totalResults,
-        occurrences: countOccurrences(genericSearchSnippets, choiceName.toLowerCase())
+        occurrences: countOccurrences(genericSearchSnippets, choiceName.toLowerCase()),
+        wikiMatches: wikiMatches[idx]
       }
     })
     .sort((a, b) => {
@@ -155,9 +173,8 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
       }
     })
     
-  // If the question has 'NOT', reverse the order of the sorted answers
   if (isInvertedQuestion) {
-    console.log(colors.red('The question contains NOT, so answers are being inverted.'))
+    console.log(colors.red('Inverted answers as question contains NOT'))
     sortedAnswers.reverse()
   }
 
@@ -172,32 +189,67 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results) 
   console.log(colors.gray(JSON.stringify(sortedAnswers, null, 2)))
 }
 
-const fetchAnswerWikiContent = answer => {
-  return wiki().search(answer.toLowerCase())
-  .then(data => {
-    console.log(data)
-  }).catch(e => console.log(e))
-  /*return wiki().page(answer)
-    .then(page => page.summary())
-    .then(console.log)
-    .catch(e => console.log(colors.red(e)))*/
-}
+const fetchAnswerWikiContent = answer => 
+  wiki().search(answer)
+    .then(data => {
+      if (data && data.results) {
+        return data.results[0]
+      }
+    })
+    .then(pageName => wiki().page(pageName))
+    .then(page => page.content())
+    .catch(() => console.log(colors.red(`Something went wrong fetching Wikipedia data for ${answer}`)))
 
-const findKeyWords = question => {
-  const words = question.split(' ')
+const findKeyPhrases = question => {
+  const words = question.replace(/[.,\/#?!$%\^&\*;:{}=\-_`~()]/g, '').split(' ')
   const tags = new Tag(words).initial().smooth().tags
   
-  return tags
-  .map((tag, idx) => ({ word: words[idx], tag }))
+  const properNouns = tags
+  .map((tag, index) => ({ word: words[index], tag, index }))
   .filter(item => item.tag.startsWith('NNP'))
-  .map(item => item.word).join(' ').replace('\'s', '')
+
+  if (properNouns.length == 1) {
+    return [properNouns[0]]
+
+  } else if (properNouns.length > 1) {
+
+    const phrases = []
+    let currentPhrase = ''
+
+    properNouns.forEach((item, index) => {
+      if (currentPhrase === '') {
+        currentPhrase = item.word
+      }
+
+      if (index > 0) {
+        const previousItem = properNouns[index - 1]
+
+        if (previousItem.index == item.index - 1) {
+          currentPhrase += ` ${item.word}`
+
+        } else {
+          phrases.push(currentPhrase)
+          currentPhrase = item.word
+        }
+
+        if (index == properNouns.length - 1 && currentPhrase !== '') {
+          phrases.push(currentPhrase)
+        }
+      }
+    })
+
+    return phrases
+
+  } else {
+    return []
+  }
 }
 
-const answerQuestion = (title, choices) => {
-  const isInvertedQuestion = title.toLowerCase().includes('not')
+const answerQuestion = (question, choices, wikiMatches) => {
+  const isInvertedQuestion = question.toLowerCase().includes('not')
 
-  const searchTitle = isInvertedQuestion ? title.replace(/ not /i, ' ') : title
-  const encodedSearchTitle = encodeURIComponent(searchTitle)
+  const searchQuery = isInvertedQuestion ? question.replace(/ not /i, ' ') : question
+  const encodedSearchQuery = encodeURIComponent(searchQuery)
   const searchHeaders = { 'User-Agent': USER_AGENT }
 
   // Convert each of the answer choices into a promise with a fetch()
@@ -206,7 +258,7 @@ const answerQuestion = (title, choices) => {
   ].map(choice => {
     const encodedChoice = encodeURIComponent(`"${choice}"`)
 
-    return fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodedSearchTitle}+${encodedChoice}`, searchHeaders)
+    return fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodedSearchQuery}+${encodedChoice}`, searchHeaders)
   })
 
   // Execute all promises, wait for them to complete, then construct
@@ -214,7 +266,7 @@ const answerQuestion = (title, choices) => {
   // and the results of the 3 answer search terms.
   return Promise.all(promises.map(p => p.then(res => res.json())))
     .then(results =>
-      parseGoogleSearchResults(choices, isInvertedQuestion, results))
+      parseGoogleSearchResults(choices, isInvertedQuestion, results, wikiMatches))
     .catch(e => {
       console.log(colors.red('Something went wrong researching that question!'))
     })
@@ -234,23 +286,44 @@ const processImage = imageFilePath => {
 
   convertImage(imageFilePath)
   .then(processedImageFilePath => readText(processedImageFilePath))
-  .then(({ title, choices }) => {
+  .then(parsedData => {
 
-    if (title && choices.length == 3) {
-      console.log(`${colors.gray('Question:')} ${title}`)
-      console.log(colors.gray('Choices:'))
-      console.log(choices.join(',\n'))
+    const { question, choices } = parsedData
+
+    if (question && choices.length == 3) {
+      console.log(`${colors.gray('Question:')} ${question}`)
+      console.log(`${colors.gray('Choices: ')} ${ choices.join(', ') }`)
+      return parsedData
 
     } else {
       console.log(colors.red('Sorry, couldn\'t read the question!'))
       return
     }
-
-    //choices.map(fetchAnswerWiki)
-
-    return answerQuestion(title, choices)
   })
-  .catch(err => console.log(colors.red('Something went wrong with that question!')))
+  .then(({ question, choices }) => {
+    const keyPhrases = findKeyPhrases(question)
+    
+    if (keyPhrases.length) {
+
+      const wikiRequests = choices
+        .map(choice => 
+          fetchAnswerWikiContent(choice)
+            .then(wikiContent =>
+              keyPhrases
+                .map(phrase => countOccurrences(wikiContent, phrase))
+                .reduce((acc, val) => acc + val, 0)
+            )
+            .catch(() => 0)
+        )
+
+      Promise.all(wikiRequests).then(wikiMatches => 
+        answerQuestion(question, choices, wikiMatches))
+
+    } else {
+      answerQuestion(question, choices, [0,0,0])
+    }
+  })
+  .catch(err => console.log(colors.red(`Something went wrong with that question! ${err}`)))
 }
 
 module.exports = { processImage, deleteFile }
