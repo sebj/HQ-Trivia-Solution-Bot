@@ -90,10 +90,19 @@ const readText = processedImageFilePath => {
       deleteFile(processedImageFilePath)
 
       // Filter non-empty/non-blank lines
-      const lines = contents.split('\n').filter(x => x && x.length > 1).map(line => line.replace('ﬂ', 'fl').replace('ﬁ','t'))
+      const lines = contents
+      .split('\n')
+      .filter(x => x && x.length > 1)
+      .map(line => 
+        line.replace('ﬂ', 'fl').replace('ﬁ','t')
+          .replace('“', '\"')
+          .replace('”', '\"')
+      )
 
       if (!lines || lines.length < 5) {
         const questionLinesCount = Math.min(lines.length - 3, 0)
+
+        console.log(colors.gray(`OCR found: `+lines))
 
         reject(`OCR failed, received ${questionLinesCount} question lines, ${lines.length - questionLinesCount} answers`)
       }
@@ -157,7 +166,7 @@ const parseGoogleSearchResults = (questionChoices, isInvertedQuestion, results, 
       return {
         name: choiceName,
         count: result.searchInformation.totalResults,
-        occurrences: countOccurrences(genericSearchSnippets, choiceName.toLowerCase()),
+        occurrences: countOccurrences(genericSearchSnippets.toLowerCase(), choiceName.toLowerCase()),
         wikiMatches: wikiMatches[idx]
       }
     })
@@ -201,12 +210,13 @@ const fetchAnswerWikiContent = answer =>
     .catch(() => console.log(colors.red(`Something went wrong fetching Wikipedia data for ${answer}`)))
 
 const findKeyPhrases = question => {
+  // Remove all punctuation from question
   const words = question.replace(/[.,\/#?!$%\^&\*;:{}=\-_`~()]/g, '').split(' ')
   const tags = new Tag(words).initial().smooth().tags
   
   const properNouns = tags
-  .map((tag, index) => ({ word: words[index], tag, index }))
-  .filter(item => item.tag.startsWith('NNP'))
+    .map((tag, index) => ({ word: words[index], tag, index }))
+    .filter(item => item.tag.startsWith('NNP'))
 
   if (properNouns.length == 1) {
     return [properNouns[0]]
@@ -246,9 +256,9 @@ const findKeyPhrases = question => {
 }
 
 const answerQuestion = (question, choices, wikiMatches) => {
-  const isInvertedQuestion = question.toLowerCase().includes('not')
+  const isInvertedQuestion = question.toLowerCase().includes(' not ')
 
-  const searchQuery = isInvertedQuestion ? question.replace(/ not /i, ' ') : question
+  const searchQuery = isInvertedQuestion ? question.replace(' not ', ' ') : question
   const encodedSearchQuery = encodeURIComponent(searchQuery)
   const searchHeaders = { 'User-Agent': USER_AGENT }
 
@@ -281,6 +291,7 @@ const processImage = imageFilePath => {
 
   checkConfig()
 
+  // Clear console
   console.log('\033c')
   console.log(colors.gray('Processing...'))
 
